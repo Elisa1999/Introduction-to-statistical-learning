@@ -1,0 +1,418 @@
+---
+title: "HW4"
+author: "Zhihui Zhang"
+date: "2/6/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ISLR2)
+library(boot)
+library(class)
+data("Weekly")
+library(MASS)
+library(e1071)
+library(dplyr)
+library(leaps)
+library(pls)
+options(scipen = 999)
+library(glmnet)
+```
+
+## 5.3 We now review k-fold cross-validation.
+## (a) Explain how k-fold cross-validation is implemented.
+We split the data into k folds. And in the first round, we use the first fold as the validation set and the others are used as training set. We keep choosing the next fold in sequence as validation set and the remaining as the training set.  
+
+## (b) What are the advantages and disadvantages of k-fold cross-validation relative to:
+## i. The validation set approach?
+ad: simple way to implement
+dis: may tend to overestimate the test error rate and the estimate can be highly variable
+
+## ii. LOOCV?
+ad: will not overestimate the test error rate
+dis: the result has more variability compared to k-fold cross-validation, expensive to implement
+
+## 5.5 In Chapter 4, we used logistic regression to predict the probability of default using income and balance on the Default data set. We will now estimate the test error of this logistic regression model using the validation set approach. Do not forget to set a random seed before beginning your analysis.
+
+## (a) Fit a logistic regression model that uses income and balance to predict default.
+```{r}
+mod5.5a <- glm(default ~ income + balance, data = Default, family = binomial())
+```
+
+## (b) Using the validation set approach, estimate the test error of this model. In order to do this, you must perform the following steps:
+## i. Split the sample set into a training set and a validation set.
+## ii. Fit a multiple logistic regression model using only the training observations.
+## iii. Obtain a prediction of default status for each individual in
+## the validation set by computing the posterior probability of default for that individual, and classifying the individual to the default category if the posterior probability is greater than 0.5.
+## iv. Compute the validation set error, which is the fraction of the observations in the validation set that are misclassified.
+
+```{r}
+set.seed(123)
+train_ind <- sample(nrow(Default), 0.7*nrow(Default))
+
+mod5.5b <- glm(default ~ income + balance, data = Default,subset = train_ind, family = binomial())        
+mod5.5b.prob <- predict(mod5.5b, newdata = Default[-train_ind,], type = 'response')
+mod5.5b.pred <- ifelse(mod5.5b.prob > 0.5, 'Yes', 'No')
+mean(mod5.5b.pred != Default$default[-train_ind])
+```
+
+
+## (c) Repeat the process in (b) three times, using three different splits of the observations into a training set and a validation set. Comment on the results obtained.
+
+```{r}
+for(i in c(124,402,1940))
+{ set.seed(i)
+train_ind <- sample(nrow(Default), 0.7*nrow(Default))
+mod5.5b <- glm(default ~ income + balance, data = Default,subset = train_ind, family = binomial())        
+mod5.5b.prob <- predict(mod5.5b, newdata = Default[-train_ind,], type = 'response')
+mod5.5b.pred <- ifelse(mod5.5b.prob > 0.5, 'Yes', 'No')
+print(mean(mod5.5b.pred != Default$default[-train_ind]))
+}
+```
+
+The variability of the estimation of the test errors is relative high.
+
+## (d) Now consider a logistic regression model that predicts the probability of default using income, balance, and a dummy variable for student. Estimate the test error for this model using the validation set approach. Comment on whether or not including a dummy variable for student leads to a reduction in the test error rate.
+
+```{r}
+set.seed(123)
+train_ind <- sample(nrow(Default), 0.7*nrow(Default))
+
+mod5.5d <- glm(default ~ income + balance + student, data = Default, subset = train_ind, family = binomial())        
+mod5.5d.prob <- predict(mod5.5d, newdata = Default[-train_ind,], type = 'response')
+mod5.5d.pred <- ifelse(mod5.5d.prob > 0.5, 'Yes', 'No')
+mean(mod5.5d.pred != Default$default[-train_ind])
+
+```
+Including a dummy variable for student won't lead to a reduction in the test error rate.
+
+## 5.6 We continue to consider the use of a logistic regression model to predict the probability of default using income and balance on the Default data set. In particular, we will now compute estimates for the standard errors of the income and balance logistic regression coefficients in two different ways: (1) using the bootstrap, and (2) using the standard formula for computing the standard errors in the glm() function. Do not forget to set a random seed before beginning your analysis.
+
+## (a) Using the summary() and glm() functions, determine the estimated standard errors for the coefficients associated with income and balance in a multiple logistic regression model that uses both predictors.
+```{r}
+set.seed(4835)
+mod5.6 <- glm(default ~ income + balance, family = binomial(), data = Default)
+summary(mod5.6)
+```
+
+## (b) Write a function,boot.fn(),that takes as input the Default data set as well as an index of the observations, and that outputs the coefficient estimates for income and balance in the multiple logistic regression model.
+
+```{r}
+boot.fn <- function(data, index){
+  coef(glm(default ~ income + balance, family = binomial(), data = Default, subset = index))
+}
+
+```
+
+## (c) Use the boot() function together with your boot.fn() function to estimate the standard errors of the logistic regression coefficients for income and balance.
+
+```{r}
+options(scipen = 999)
+boot(Default, boot.fn, R = 1000)
+```
+
+## (d) Comment on the estimated standard errors obtained using the glm() function and using your bootstrap function.
+
+
+The estimated standard errors obtained from two method are quite close. 
+
+## 5.8 We will now perform cross-validation on a simulated data set.
+## (a) Generate a simulated data set as follows:
+## In this data set, what is n and what is p? Write out the model used to generate the data in equation form.
+```{r}
+set.seed(1)
+x <- rnorm(100)
+y <- x - 2 * x^2 + rnorm(100)
+```
+
+## (b) Create a scatterplot of X against Y . Comment on what you find.
+```{r}
+plot(x,y)
+```
+X and Y have obvious non-linear relationship.
+
+## (c) Set a random seed, and then compute the LOOCV errors that result from fitting the following four models using least squares:
+## Note you may find it helpful to use the data.frame() function
+## to create a single data set containing both X and Y .
+
+```{r}
+set.seed(424)
+mod5.8a <- glm(y ~ x)
+cv.err <- cv.glm(data.frame(x,y), mod5.8a)
+cv.err$delta
+
+mod5.8b <- glm(y ~ x + I(x^2))
+cv.err <- cv.glm(data.frame(x, x^2,y), mod5.8b)
+cv.err$delta
+
+mod5.8c <- glm(y ~ x + I(x^2) +  I(x^3))
+cv.err <- cv.glm(data.frame(x, x^2, x^3, y), mod5.8c)
+cv.err$delta
+
+mod5.8d <- glm(y ~ x + I(x^2) +  I(x^3) + I(x^4))
+cv.err <- cv.glm(data.frame(x, x^2, x^3, x^4, y), mod5.8d)
+cv.err$delta
+```
+
+## (d) Repeat (c) using another random seed, and report your results.
+```{r}
+set.seed(1942)
+mod5.8a <- glm(y ~ x)
+cv.err <- cv.glm(data.frame(x,y), mod5.8a)
+cv.err$delta
+
+mod5.8b <- glm(y ~ x + I(x^2))
+cv.err <- cv.glm(data.frame(x, x^2,y), mod5.8b)
+cv.err$delta
+
+mod5.8c <- glm(y ~ x + I(x^2) +  I(x^3))
+cv.err <- cv.glm(data.frame(x, x^2, x^3, y), mod5.8c)
+cv.err$delta
+
+mod5.8d <- glm(y ~ x + I(x^2) +  I(x^3) + I(x^4))
+cv.err <- cv.glm(data.frame(x, x^2, x^3, x^4, y), mod5.8d)
+cv.err$delta
+```
+The random seed won't affect the result of LOOCV.
+
+
+## Are your results the same as what you got in (c)? Why?
+Yes, because we use LOOCV, which means no matter how we set the random seed, we will iterate each data point in our data and use it as validation set.
+
+## (e) Which of the models in (c) had the smallest LOOCV error? Is this what you expected? Explain your answer.
+
+The model with quadratic term had the smallest LOOCV. Yes, the model is corresponding to the true relationship between x and y.
+
+## (f) Comment on the statistical significance of the coefficient estimates that results from fitting each of the models in (c) using least squares. Do these results agree with the conclusions drawn based on the cross-validation results?
+```{r}
+summary(mod5.8a)
+summary(mod5.8b)
+summary(mod5.8c)
+summary(mod5.8d)
+```
+Yes, the significance of the coefficient correlations matches the result that draw from the cross validation.
+
+## 6.2 For parts (a) through (c), indicate which of i. through iv. is correct. Justify your answer.
+## (a) The lasso, relative to least squares, is:
+## i. More flexible and hence will give improved prediction accuracy when its increase in bias is less than its decrease in variance.
+## ii. More flexible and hence will give improved prediction accuracy when its increase in variance is less than its decrease in bias.
+## iii. Less flexible and hence will give improved prediction accuracy when its increase in bias is less than its decrease in variance.
+## iv. Less flexible and hence will give improved prediction accuracy when its increase in variance is less than its decrease in bias.
+
+Lasso is a more restrictive model compared to  least squares. It usually result in higher prediction accuracy by decreasing bias. iv is correct
+
+## (b) Repeat (a) for ridge regression relative to least squares.
+
+The reason for ridge regression is the same. Then iv is the correct answer.
+
+## (c) Repeat (a) for non-linear methods relative to least squares.
+
+Non-linear method is a more flexible model with higher accuracy if the true relationship is non-linear by decreasing in bias. The ii is correct. 
+
+## 6.9 In this exercise, we will predict the number of applications received using the other variables in the College data set.
+
+## (a) Split the data set into a training set and a test set.
+
+```{r}
+data(College)
+set.seed(1)
+train <- sample( c(TRUE, FALSE), nrow(College), replace = TRUE)
+test <- (!train)
+```
+
+## (b) Fit a linear model using least squares on the training set, and report the test error obtained.
+
+```{r}
+#head(College)
+mod6.9b <- lm(Apps ~. , data = College[train,])
+mod6.9b.pred <- predict(mod6.9b, newdata = College[test,])
+mean((mod6.9b.pred - College[test,]$Apps)^2)
+```
+
+## (c) Fit a ridge regression model on the training set, with $\lambda$ chosen by cross-validation. Report the test error obtained.
+
+```{r}
+set.seed(1)
+x <- model.matrix(Apps ~., College)[ ,-1]
+y <- College$Apps
+mod6.9c <- cv.glmnet(x[train,], y[train], alpha = 0)
+plot(mod6.9c)
+bestlam <- mod6.9c$lambda.min
+mod6.9c.pred <- predict(mod6.9c, s = bestlam, newx = x[test, ])
+mean((mod6.9c.pred - y[test])^2)
+```
+
+## (d) Fit a lasso model on the training set, with $\lambda$ chosen by cross- validation. Report the test error obtained, along with the number of non-zero coefficient estimates.
+
+```{r}
+set.seed(1)
+mod6.9d <- cv.glmnet(x[train, ], y[train], alpha = 1)
+plot(mod6.9d)
+bestlam <- mod6.9d$lambda.min
+mod6.9d.pred <- predict(mod6.9d, s = bestlam, newx = x[test,])
+#coefficients
+coeff <- predict(mod6.9d, type = 'coefficients', s = bestlam)[1:18,]
+coeff[coeff > 0]
+#test error
+mean((mod6.9d.pred - y[test])^2)
+```
+
+## (e) Fit a PCR model on the training set, with M chosen by cross-validation. Report the test error obtained, along with the value of M selected by cross-validation.
+
+```{r}
+set.seed(1)
+mod6.9e <- pcr(Apps~., data = College, subset = train, sccale = TRUE, validation = 'CV')
+validationplot(mod6.9e, val.type = 'MSEP')
+mod6.9e.pred <- predict(mod6.9e, x[test, ], ncomp = 6)
+#test error
+mean((mod6.9e.pred - y[test])^2)
+```
+
+## (f) Fit a PLS model on the training set, with M chosen by cross- validation. Report the test error obtained, along with the value of M selected by cross-validation.
+```{r}
+set.seed(1)
+mod6.9f <- plsr(Apps ~., data = College, subset = train, scale = TRUE, validation = 'CV')
+validationplot(mod6.9f, val.type = 'MSEP')
+mod6.9f.pred <- predict(mod6.9f, x[test, ], ncomp = 7)
+mean((mod6.9f.pred - y[test])^2)
+```
+
+## (g) Comment on the results obtained. How accurately can we predict the number of college applications received? Is there much difference among the test errors resulting from these five ap- proaches?
+
+Compared PLS and PCR, the PLS performs better in predicting. But the test error of them are larger than that in OLS. The ridge regression give us the best model when considering the MSE. The lasso also performs badly than OLS. Yes, there are large differences between lasso, PCR and OLS. 
+
+
+## 6.10 We have seen that as the number of features used in a model increases, the training error will necessarily decrease, but the test error may not. We will now explore this in a simulated data set.
+## (a) Generate a data set with p = 20 features, n = 1,000 observations, and an associated quantitative response vector generated according to the model $Y =X\beta+\epsilon$ where beta has some elements that are exactly equal to zero.
+
+```{r}
+set.seed(123)
+coeffi <- sample(0:20, 20, replace = TRUE)
+coeffi[c(1,4,7,20)] <- 0 
+
+x <- matrix(data = sample(10^seq(3,-2, length = 30000), 20000, replace = TRUE), nrow = 1000, ncol = 20)
+e <- rnorm(1000)
+y <- x %*% coeffi + e
+
+```
+
+## (b) Split your dataset into a training set containing 100 observations and a test set containing 900 observations.
+```{r}
+set.seed(380)
+train <- sample(1:1000, 100)
+test <- -train
+```
+
+## (c) Perform best subset selection on the training set, and plot the training set MSE associated with the best model of each size.
+
+```{r}
+mod6.10 <- regsubsets(y ~ ., data = data.frame(x,y) , subset = train, nvmax = 20)
+plot(mod6.10$rss, xlab = 'number of variables', ylab = 'RSS', type = 'l')
+```
+
+## (d) Plot the test set MSE associated with the best model of each size.
+```{r}
+test.mat <- model.matrix(y~., data = data.frame(y,x)[test,])
+mse <- rep(NA, 20)
+for(i in 1:20){
+   coefi <- coef(mod6.10, id = i)
+  pred <- test.mat[, names(coefi)] %*% coefi
+  mse[i] <- mean((y[test] - pred)^2)
+}
+plot(1:20, mse, type = 'l', xlab = 'number of variables', ylab = 'test MSE')
+```
+## (e) For which model size does the test set MSE take on its minimum value? Comment on your results. If it takes on its minimum value for a model containing only an intercept or a model containing all of the features, then play around with the way that you are generating the data in (a) until you come up with a scenario in which the test set MSE is minimized for an intermediate model size.
+
+```{r}
+which.min(mse)
+```
+The model reaches smallest MSE when the numebr of variables in the model is 17.
+
+
+## (f) How does the model at which the test set MSE is minimized compare to the true model used to generate the data? Comment on the coefficient values.
+
+```{r}
+coef(mod6.10, id = 17)
+coeffi
+```
+
+The coefficient values are quite similar with the true value. It almost remove all the coefficients which are 0.
+
+
+## (g) Create a plot displaying for a range of values of r, where is the jth coefficient estimate for the best model containing r coefficients. Comment on what you observe. How does this compare to the test MSE plot from (d)?
+```{r}
+sq_beta <- rep(0,20)
+coefi <- rep(0,20)
+
+for(i in 2:21){
+  for(j in 1:20){
+  coefi[j] <- coef(mod6.10, id = j)[i]
+  }
+    print(coefi)
+  sq_beta[i-1] <- sqrt(sum(coefi - coeffi[i-1], na.rm = TRUE)^2)
+  coefi <- rep(0,20)
+}
+
+plot(1:20, sq_beta, type = 'l', xlab = 'number of variables')
+```
+The line varies dramatically in this plot, while in the MSE plot, the line has the decreasing trend. 
+
+## 6.11 We will now try to predict per capita crime rate in the Boston data set.
+
+## (a) Try out some of the regression methods explored in this chapter, such as best subset selection, the lasso, ridge regression, and PCR. Present and discuss results for the approaches that you consider.
+
+```{r}
+set.seed(146)
+#use 70% data for training
+train <- sample(1:nrow(Boston), nrow(Boston)*0.7)
+test <- (-train)
+x <- model.matrix(crim ~. , Boston)[, -1]
+y <- Boston$crim
+
+#Ridge regression
+mod6.11a <- cv.glmnet(x[train,],y[train],alpha = 0)
+plot(mod6.11a)
+bestlam <- mod6.11a$lambda.min
+mod6.11a.pred <- predict(mod6.11a, s = bestlam, newx = x[test, ])
+#MSE for ridge regression
+mean((mod6.11a.pred - y[test])^2)
+
+#Lasso regression
+mod6.11a1 <- cv.glmnet(x[train,],y[train],alpha = 1)
+plot(mod6.11a1)
+bestlam <- mod6.11a1$lambda.min
+mod6.11a1.pred <- predict(mod6.11a1, s = bestlam, newx = x[test, ])
+#MSE for lasso regression
+mean((mod6.11a1.pred - y[test])^2)
+
+#principal component regression
+mod6.11a2 <- pcr(crim ~., data = Boston, subset = train, scale = TRUE, validation = 'CV')
+validationplot(mod6.11a2, val.type = 'MSEP')
+mod6.11a2.pred <- predict(mod6.11a2, x[test, ], ncomp = 7 )
+mean((mod6.11a2.pred - y[test])^2)
+
+#partial least square 
+mod6.11a3 <- plsr(crim ~., data = Boston, subset = train, scale = TRUE, validation = 'CV')
+validationplot(mod6.11a3, val.type = 'MSEP')
+mod6.13a3.pred <- predict(mod6.11a3, x[test,], ncomp = 8)
+mean((mod6.13a3.pred - y[test])^2)
+```
+The ridge regression has the best performance. 
+
+## (b) Propose a model (or set of models) that seem to perform well on this data set, and justify your answer. Make sure that you are evaluating model performance using validation set error, cross- validation, or some other reasonable alternative, as opposed to using training error.
+```{r}
+#Ridge regression
+mod6.11a <- cv.glmnet(x[train,],y[train],alpha = 0)
+plot(mod6.11a)
+bestlam <- mod6.11a$lambda.min
+mod6.11a.pred <- predict(mod6.11a, s = bestlam, newx = x[test, ])
+#MSE for ridge regression
+mean((mod6.11a.pred - y[test])^2)
+```
+
+## (c) Does your chosen model involve all of the features in the data set? Why or why not?
+Yes, I used ridge regression in my model, and the model contains all of the features in the data set.

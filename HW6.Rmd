@@ -1,0 +1,152 @@
+---
+title: "HW6"
+author: "Zhihui Zhang"
+date: "2/23/2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ISLR2)
+data(Boston)
+library(randomForest)
+library(dplyr)
+library(tidyr)
+data("Carseats")
+library(tree)
+library(BART)
+data(Caravan)
+library(gbm)
+library(ggplot2)
+```
+
+
+
+## 8.7 In the lab, we applied random forests to the Boston data using mtry = 6 and using ntree = 25 and ntree = 500. Create a plot displaying the test error resulting from random forests on this data set for a more comprehensive range of values for mtry and ntree. You can model your plot after Figure 8.10. Describe the results obtained.
+
+```{r}
+set.seed(124)
+train <- sample(1:nrow(Boston), nrow(Boston)/2)
+
+mse <- matrix(0, nrow = 25, ncol = 5)
+rownames(mse) <- seq(from = 20, to = 500, by = 20)
+ntr <- seq(from = 20, to = 500, by = 20)
+p <- c(12, 6, sqrt(12), 2, 1)
+for(i in 1:length(ntr)){
+  for(j in 1:length(p)){
+    mod8.7 <- randomForest(medv ~., data = Boston, mtry = j, ntree = i, subset = train)
+    mod8.7.pred <- predict(mod8.7, newdata = Boston[-train,])
+    mse[i,j] <- mean((mod8.7.pred - Boston$medv[-train])^2)
+  }
+}
+
+mse_dat <- as.data.frame(mse)
+mse_dat$ntree <- seq(from = 20, to = 500, by = 20)
+colnames(mse_dat) <- c('p','p/2','sqrt(p)','2', '1', 'ntree')
+mse_dat %>% pivot_longer(cols = 1:5, values_to = 'MSE') %>%
+  ggplot(aes(x = ntree, y = MSE, group = name, color = name)) + 
+  geom_line()
+```
+
+## 8.8 In the lab, a classification tree was applied to the Carseats data set after converting Sales into a qualitative response variable. Now we will seek to predict Sales using regression trees and related approaches, treating the response as a quantitative variable.
+
+## (a) Split the data set into a training set and a test set.
+
+```{r}
+train_ind <- sample(1:nrow(Carseats), nrow(Carseats)/2)
+```
+
+## (b) Fit a regression tree to the training set. Plot the tree, and interpret the results. What test MSE do you obtain?
+
+```{r}
+mod8.8b <- tree(Sales ~., data = Carseats, subset = train_ind)
+plot(mod8.8b)
+text(mod8.8b, pretty = 0)
+yhat <- predict(mod8.8b, newdata = Carseats[-train_ind,])
+mean((yhat - Carseats$Sales[-train_ind])^2)
+```
+The plot above shows that ShelveLoc is the most important predictor for sales. 
+
+## (c) Use cross-validation in order to determine the optimal level of tree complexity. Does pruning the tree improve the test MSE?
+```{r}
+mod8.8c <- cv.tree(mod8.8b)
+plot(mod8.8c$size, mod8.8c$dev, type = 'b')
+prun.mod8.8c <- prune.tree(mod8.8b, best = 13)
+yhat <- predict(prun.mod8.8c, newdata = Carseats[-train_ind, ])
+mean((yhat - Carseats$Sales[-train_ind])^2)
+```
+No, pruning in this case will not prove the MSE.
+
+
+## (d) Use the bagging approach in order to analyze this data. What test MSE do you obtain? Use the importance() function to determine which variables are most important.
+```{r}
+mod8.8d <- randomForest(Sales ~., data = Carseats, subset = train_ind)
+yhat <- predict(mod8.8d, new_data = Carseats[-train,])
+mean((yhat - Carseats$Sales[-train_ind])^2)
+importance(mod8.8d)
+```
+ShelveLoc is the most important variable.
+
+
+## (e) Use random forests to analyze this data. What test MSE do you obtain? Use the importance() function to determine which vari- ables are most important. Describe the effect of m, the number of variables considered at each split, on the error rate obtained.
+```{r}
+mod8.8e <- randomForest(Sales ~., mtry = 5, ntree = 25, data = Carseats, subset = train_ind)
+yhat <- predict(mod8.8e, newdata = Carseats[-train_ind,])
+mean((yhat - Carseats$Sales[-train_ind])^2)
+importance(mod8.8e)
+plot(mod8.8e)
+```
+We choose m = 5 = p/2 here. And the test MSE is 2.40 which is much lower than other methods.The most imporant variable is ShelveLoc.
+
+
+## (f) Now analyze the data using BART, and report your results.
+```{r}
+X.train <- Carseats[train_ind,-1]
+X.test <- Carseats[-train_ind,-1]
+y.train <- Carseats$Sales[train_ind]
+y.test <- Carseats$Sales[-train_ind]
+mod8.8f <- gbart(X.train, y.train, x.test = X.test)
+yhat <- mod8.8f$yhat.test.mean 
+mean((yhat - y.test)^2)
+```
+
+
+## 8.11 This question uses the Caravan data set.
+## (a) Create a training set consisting of the first 1,000 observations, and a test set consisting of the remaining observations.
+
+```{r}
+train_ind <- 1:1000
+```
+
+## (b) Fit a boosting model to the training set with Purchase as the response and the other variables as predictors. Use 1,000 trees, and a shrinkage value of 0.01. Which predictors appear to be the most important?
+
+```{r}
+caravan <- Caravan 
+caravan$Purchase <- ifelse(Caravan$Purchase %in% 'Yes', 1, 0)
+mod8.11b <- gbm(Purchase ~., data = caravan[train_ind, ], distribution = 'bernoulli', n.trees = 1000, shrinkage = 0.01)
+summary(mod8.11b)
+plot(mod8.11b, id = 'MKOOPKLA')
+```
+
+MKOOPKLA is the most important predictors.
+
+## (c) Use the boosting model to predict the response on the test data. Predict that a person will make a purchase if the estimated prob-ability of purchase is greater than 20 %. Form a confusion ma- trix. What fraction of the people predicted to make a purchase do in fact make one? How does this compare with the results obtained from applying KNN or logistic regression to this data set?
+```{r}
+mod8.11.prob <- predict(mod8.11b, newdata = caravan[-train_ind,], type = 'response')
+y_pred <- ifelse(mod8.11.prob > 0.2, 'Yes', 'No')
+table(y_pred, Caravan$Purchase[-train_ind])
+prop.table(table(y_pred, Caravan$Purchase[-train_ind]))
+```
+```{r}
+mod8.11c <- glm(Purchase ~., family = binomial(), data = caravan, subset = train_ind )
+mod8.11c.prob <- predict(mod8.11c, newdata = caravan[-train_ind, ], type = 'response')
+y_pred <- ifelse(mod8.11c.prob > 0.2, 'Yes', 'No')
+table(y_pred, Caravan$Purchase[-train_ind])
+prop.table(table(y_pred, Caravan$Purchase[-train_ind]))
+```
+1.4% of people predicted to make a purchase do in fact make one. The logistic regression will perform better when predicting the people who make purchase. 

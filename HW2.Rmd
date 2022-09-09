@@ -1,0 +1,418 @@
+---
+title: "HW2"
+author: Zhihui Zhang
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ISLR2)
+data(Auto)
+```
+
+## 8. This question involves the use of simple linear regression on the Auto data set.
+## (a) Use the lm() function to perform a simple linear regression with mpg as the response and horsepower as the predictor. Use the summary() function to print the results. Comment on the output. 
+```{r}
+mod3.8 <- lm(mpg ~ horsepower, data = Auto)
+summary(mod3.8)
+```
+## For example:
+## i.Is there a relationship between the predictor and the response?
+
+Yes, since the p-value of the coefficient horsepower is less than 0.05, we reject the null hypothesis that there is no relationship between the horsepower and mpg.  
+
+## ii. How strong is the relationship between the predictor and the response?
+
+One unit increase in horsepower is associated with 0.16 unit decrease in the mpg. 
+
+## iii. Is the relationship between the predictor and the response positive or negative?
+
+negative
+
+## iv. What is the predicted mpg associated with a horsepower of 98? What are the associated 95 % confidence and prediction intervals?
+
+```{r}
+#predicted
+#mod3.8$coefficients[1] + mod3.8$coefficients[2]*98
+predict(mod3.8, newdata = data.frame(horsepower = 98))
+
+#CI: How to calculate by hand? 
+#c(mod3.8$coefficients[1] + mod3.8$coefficients[2]*98 - sigma(mod3.8)*qt(0.05, mod3.8$df.residual, lower.tail=FALSE) , mod3.8$coefficients[1] - mod3.8$coefficients[2]*98 + sigma(mod3.8)*qt(0.05, mod3.8$df.residual, lower.tail=FALSE))
+predict(mod3.8, data.frame(horsepower = 98), interval = "confidence")
+
+
+#PI:
+#c(mod3.8$coefficients[1] + mod3.8$coefficients[2]*98 - sqrt(sigma(mod3.8)^2 + mean(mod3.8$residuals^2))*qt(0.05, mod3.8$df.residual, lower.tail=FALSE) , mod3.8$coefficients[1] - mod3.8$coefficients[2]*98 + sqrt(sigma(mod3.8)^2 + mean(mod3.8$residuals^2))*qt(0.05, mod3.8$df.residual, lower.tail=FALSE))
+predict(mod3.8, data.frame(horsepower = 98), interval = "prediction")
+```
+
+
+## (b) Plot the response and the predictor. Use the abline() function to display the least squares regression line.
+```{r}
+plot(Auto$horsepower, Auto$mpg)
+abline(a = mod3.8$coefficients[1], b = mod3.8$coefficients[2], col = 'red')
+```
+
+## (c) Use the plot() function to produce diagnostic plots of the least squares regression fit. Comment on any problems you see with the fit.
+```{r}
+plot(predict(mod3.8), residuals(mod3.8))
+```
+The residual plot indicates that the strong non-linearity in the data. 
+
+## 9. This question involves the use of multiple linear regression on the Auto data set.
+## (a) Produce a scatterplot matrix which includes all of the variables in the data set.
+```{r}
+pairs(Auto)
+```
+## (b) Compute the matrix of correlations between the variables using the function cor(). You will need to exclude the name variable, which is qualitative.
+```{r}
+cor(Auto[which(names(Auto)!='name')])
+```
+## (c) Use the lm() function to perform a multiple linear regression with mpg as the response and all other variables except name as the predictors. Use the summary() function to print the results. Comment on the output. For instance:
+```{r}
+mod3.9 <- lm(mpg ~. -name, Auto)
+summary(mod3.9)
+```
+## i. Is there a relationship between the predictors and the response?
+
+Yes, the p-value for the F-test which test the hypothesis that at least one of the predictor is not equal to 0 is less than 0.05. We can the reject the null hypothesis that there is no relationship between the predictors and the response. 
+
+## ii. Which predictors appear to have a statistically significant relationship to the response?
+Yes, based on the p-values in the table, displacement, weight, year and origin have a statistically significant relationship to the response. 
+
+## iii. What does the coefficient for the year variable suggest?
+
+With one unit increase in year, the mpg will increase 1.426 unit. 
+
+## (d) Use the plot() function to produce diagnostic plots of the linear regression fit. Comment on any problems you see with the fit. Do the residual plots suggest any unusually large outliers? Does the leverage plot identify any observations with unusually high leverage?
+
+```{r}
+par(mfrow = c(2, 2))
+plot(mod3.9)
+#plot(fitted(mod3.9), residuals(mod3.9))
+#plot(fitted(mod3.9), rstudent(mod3.9))
+#plot(hatvalues(mod3.9))
+```
+The residual plot looks fine but there is still a pattern between residual and fitted values. The leverage plot shows that there are some points with high leverage. 
+
+## (e) Use the * and : symbols to fit linear regression models with interaction effects. Do any interactions appear to be statistically significant?
+```{r}
+mod3.9e <- lm(mpg ~ displacement*year + weight*origin , data = Auto )
+summary(mod3.9e)
+```
+Yes, the interaction terms displacement:year and weight:origian is statistically significant. 
+
+
+## (f) Try a few different transformations of the variables, such as log(X), sqrt(X), X2. Comment on your findings.
+
+```{r}
+mod3.9f1 <- lm(mpg ~ displacement +  year + weight + I(weight^2) + origin , data = Auto )
+summary(mod3.9f1)
+par(mfrow = c(2, 2))
+plot(mod3.9f1)
+
+mod3.9f2 <- lm(mpg ~ sqrt(displacement) +  year + weight + origin , data = Auto )
+summary(mod3.9f2)
+par(mfrow = c(2, 2))
+plot(mod3.9f2)
+
+mod3.9f3 <- lm(mpg ~ displacement  +  log(year) + weight  + origin , data = Auto )
+summary(mod3.9f3)
+par(mfrow = c(2, 2))
+plot(mod3.9f3)
+```
+The non-linear transformation does not seem to improve the model. The model still tend to overestimate when the outcome is large. 
+
+## 10. This question should be answered using the Carseats data set.
+## (a) Fit a multiple regression model to predict Sales using Price, Urban, and US.
+```{r}
+data(Carseats)
+mod3.10 <- lm(Sales ~ Price + Urban + US, data = Carseats)
+summary(mod3.10)
+```
+## (b) Provide an interpretation of each coefficient in the model. Be careful—some of the variabls in the model are qualitative!
+
+One unit increase in Price is associated with 0.054 unit decrease in the Sales, holding other predictors constant.
+Compared with stores in rural area, the stores in urban area have less 0.022 unit of Sales.
+Compared with stores that are not in the US, the stores in the US is associated 1.2 unit more Sales.
+
+
+## (c) Write out the model in equation form, being careful to handle the qualitative variables properly.
+
+$\hat{Sales} = 13.04 - 0.054*Price - 0.02*Urban(Yes) + 1.2*US(Yes)$
+
+## (d) For which of the predictors can you reject the null hypothesis H0?
+Price and US
+
+## (e) On the basis of your response to the previous question, fit a smaller model that only uses the predictors for which there is evidence of association with the outcome.
+```{r}
+mod3.10e <- lm(Sales ~ Price +  US, data = Carseats)
+summary(mod3.10e)
+```
+## (f) How well do the models in (a) and (e) fit the data?
+The R-square in the model (e) is slightly better than that in model (a). And there is no much difference between the diagnostic plot of the model (a) and model (e).
+```{r}
+par(mfrow = c(2,4))
+plot(mod3.10); plot(mod3.10e)
+```
+
+## (g) Using the model from (e), obtain 95% confidence intervals for the coefficient(s). 
+```{r}
+confint(mod3.10e)
+```
+
+## (h) Is there evidence of outliers or high leverage observations in the model from (e)?
+```{r}
+par(mfrow = c(1,2))
+plot(predict(mod3.10e), rstudent(mod3.10e))
+plot(hatvalues(mod3.10e))
+```
+There is no evidence of the exsistition of outliers and high leverage points in the model. 
+
+## 11. In this problem we will investigate the t-statistic for the null hypothesis H0 : $\beta = 0$ in simple linear regression without an intercept. To begin, we generate a predictor x and a response y as follows.
+```{r}
+set.seed(1)
+x <- rnorm(100)
+y <- 2 * x + rnorm(100)
+```
+
+## (a) Perform a simple linear regression of y onto x, without an intercept. Report the coefficient estimate , the standard error of this coefficient estimate, and the t-statistic and p-value associated with the null hypothesis H0. Comment on these results. (You can perform regression without an intercept using the command .)
+```{r}
+mod3.11a <- lm(y ~ -1 + x)
+summary(mod3.11a)
+```
+One unit increase in x is associated with 1.99 unit increase in y. The coefficient of x is statistically significant at 0.05 confidence level since p =  0 < 0.05. We can reject the null hypothesis. 
+
+## (b) Now perform a simple linear regression of x onto y without an intercept, and report the coefficient estimate, its standard error, and the corresponding t-statistic and p-values associated with the null hypothesis H0 . Comment on these results.
+```{r}
+mod3.11b <- lm(x ~ y + 0)
+summary(mod3.11b)
+```
+One unit in crease in y is associated with 0.39 unit increase in x. We can reject the null hypothesis that $\beta = 0$.
+
+
+## (c) What is the relationship between the results obtained in (a) and (b)?
+
+The result in a is the reciprocal of the result in b
+
+## (d)
+
+The derivation part is in the conceptual part.
+```{r}
+n <- length(x)
+t <- sqrt(n - 1)*(x %*% y)/sqrt(sum(x^2) * sum(y^2) - (x %*% y)^2)
+as.numeric(t)
+```
+
+## (e)
+
+When we switch $x_i$ and $y_i$ in the formula, the result is the same.
+
+## (f) In R, show that when regression is performed with an intercept, the t-statistic for H0 : $\beta1$ = 0 is the same for the regression of y onto x as it is for the regression of x onto y.
+
+```{r}
+mod3.11f1 <- lm(y ~ x)
+summary(mod3.11f1)
+mod3.11f2 <- lm(x ~ y)
+summary(mod3.11f2)
+```
+The t-value is the same.
+
+## 12. This problem involves simple linear regression without an intercept.
+
+## (a) Recall that the coefficient estimate for the linear regression of Y onto X without an intercept is given by (3.38). Under what circumstance is the coefficient estimate for the regression of X onto Y the same as the coefficient estimate for the regression of Y onto X?
+
+When sum of square x is equal to sum of square y.
+
+## (b) Generate an example in R with n = 100 observations in which the coefficient estimate for the regression of X onto Y is different from the coefficient estimate for the regression of Y onto X.
+```{r}
+set.seed(1)
+x <- rnorm(100)
+y <- x^2 + rnorm(100)
+mod12.b1 <- lm(y ~x + 0)
+mod12.b2 <- lm(x~ y + 0)
+summary(mod12.b1)
+summary(mod12.b2)
+```
+(c) Generate an example in R with n = 100 observations in which the coefficient estimate for the regression of X onto Y is the same as the coefficient estimate for the regression of Y onto X.
+```{r}
+x <- 1:100
+y <- 100:1
+mod12.c1 <- lm(y ~x + 0)
+mod12.c2 <- lm(x~ y + 0)
+summary(mod12.c1)
+summary(mod12.c2)
+```
+
+## 13. In this exercise you will create some simulated data and will fit simple linear regression models to it. Make sure to use set.seed(1) prior to starting part (a) to ensure consistent results.
+
+## (a) Using the rnorm() function, create a vector, x, containing 100 observations drawn from a N(0,1) distribution. This represents a feature, X.
+
+```{r}
+set.seed(1)
+x <- rnorm(100, 0, 1)
+```
+
+## (b) Using the rnorm() function, create a vector, eps, containing 100 observations drawn from a N(0,0.25) distribution—a normal distribution with mean zero and variance 0.25.
+```{r}
+eps <- rnorm(100, 0, 0.25)
+```
+
+## (c) Using x and eps, generate a vector y according to the model
+## Y = -1+0.5X+ eps. (3.39) What is the length of the vector y? What are the values of $\beta_0$ and $\beta_1$ in this linear model?
+
+```{r}
+y <- -1 + 0.5*x + eps
+```
+
+The length of y is also 100. The $\beta_0$ in the model is -1 and the $\beta_1$ in the model is 0.5.
+
+## (d) Create a scatterplot displaying the relationship between x and y. Comment on what you observe.
+
+```{r}
+plot(x, y)
+```
+It looks like x and y have linear relationship based on the plot.
+
+## (e) Fit a least squares linear model to predict y using x. Comment on the model obtained. How do  $\hat{\beta_0}$ and $\hat{\beta_1}$ compare to  $\beta_0$ and  $\beta_1$?
+```{r}
+mod3.13e <- lm(y ~ x)
+summary(mod3.13e)
+```
+There is a slight difference between estimated coefficients and the true one. 
+
+## (f) Display the least squares line on the scatterplot obtained in (d). Draw the population regression line on the plot, in a different color. Use the legend() command to create an appropriate legend.
+
+```{r}
+plot(x, y)
+abline(a = mod3.13e$coefficients[1], b = mod3.13e$coefficients[2], col = 'red')
+abline(a = -1, b = 0.5, col = 'blue')
+legend("topleft", c("Least square", "Regression"), col = c("red", "blue"), lty = c(1, 1))
+```
+## (g) Now fit a polynomial regression model that predicts y using x and x2. Is there evidence that the quadratic term improves the model fit? Explain your answer.
+
+```{r}
+mod3.13g <- lm(y ~ x + I(x^2))
+summary(mod3.13g)
+anova(mod3.13e, mod3.13e)
+```
+No, adding a quadratic term won't improve the fit of the model.
+
+## (h) Repeat (a)–(f) after modifying the data generation process in such a way that there is less noise in the data. The model (3.39) should remain the same. You can do this by decreasing the variance of the normal distribution used to generate the error term in (b). Describe your results.
+
+```{r}
+set.seed(1)
+x1 <- rnorm(100, 0, 1)
+eps1 <- rnorm(100, 0, 0.1)
+y1 <- -1 + 0.5*x1 + eps1
+mod3.13h <- lm(y1 ~ x1)
+summary(mod3.13h)
+```
+After decreasing the variance of the error, the standard errors of the estimates decrease. 
+
+## (i) Repeat (a)–(f) after modifying the data generation process in such a way that there is more noise in the data. The model (3.39) should remain the same. You can do this by increasing the variance of the normal distribution used to generate the error term in (b). Describe your results.
+```{r}
+set.seed(1)
+x2 <- rnorm(100, 0, 1)
+eps2 <- rnorm(100, 0, 0.5)
+y2 <- -1 + 0.5*x2 + eps2
+mod3.13i <- lm(y2 ~ x2)
+summary(mod3.13i)
+```
+
+After increasing the variance of the error, the standard errors of the estimates also increase. 
+
+## (j) What are the confidence intervals for beta0 and beta1 based on the original data set, the noisier data set, and the less noisy data set? Comment on your results.
+```{r}
+#original data 
+confint(mod3.13e)
+
+#nosier
+confint(mod3.13i)
+
+#less noisy
+confint(mod3.13h)
+```
+The confidence interval is narrower in dataset with less noise while is wider in the dataset which is nosier.
+
+## 14. This problem focuses on the collinearity problem.
+
+## (a) Perform the following commands in R:
+## The last line corresponds to creating a linear model in which y is a function of x1 and x2. Write out the form of the linear model. What are the regression coefficients?
+
+```{r}
+set.seed(1)
+x1 <- runif(100)
+x2 <- 0.5 * x1 + rnorm(100) / 10
+y <- 2 + 2 * x1 + 0.3 * x2 + rnorm(100)
+```
+
+$\hat{y_i} = 2 + 2*x_{1i} + 0.3*x_{2i} + \epsilon_i$
+The intercept is 2, the coefficients for the x1 and x2 are 2 and 0.3.
+
+
+## (b) What is the correlation between x1 and x2? Create a scatterplot displaying the relationship between the variables.
+
+```{r}
+plot(x1, x2)
+```
+It seems to be a linear relationship between x1 and x2.
+
+
+## (c) Using this data, fit a least squares regression to predict y using x1 and x2. Describe the results obtained. What are hat_beta0, hat_beta1, and hat_beta2? How do these relate to the true beta0, beta1, and beta2? Can you reject the null hypothesis H0 : beta1 = 0? How about the null hypothesis H0 : beta2 = 0?
+
+```{r}
+mod3.14c <- lm(y ~ x1 + x2)
+summary(mod3.14c)
+```
+The estimated coefficients of x1 and x2 is quite different from the true values. We can reject the null hypothesis that $\beta_1$=0 at 0.05 significance level. However, we fail to reject the null hypothesis that $\beta_2$ = 0 at any significance level.
+
+## (d) Now fit a least squares regression to predict y using only x1. Comment on your results. Can you reject the null hypothesis H0 :$\beta_1$ =0?
+
+```{r}
+mod3.14d <- lm(y ~ x1)
+summary(mod3.14d)
+```
+Yes, we can reject the null hypothesis. And the $\hat{\beta_1}$ approximate to the $\beta_1$.
+
+## (e) Now fit a least squares regression to predict y using only x2. Comment on your results. Can you reject the null hypothesis H0:$\beta_1 =0$?
+
+```{r}
+mod3.14e <- lm(y ~ x2)
+summary(mod3.14e)
+```
+Yes, we can reject the null hypothesis.
+
+## (f) Do the results obtained in (c)–(e) contradict each other? Explain your answer.
+
+Yes, if we regress y on x1, x2 respectively, the coefficients of them are both statistically significant. But when we regress y on x1, x2, only the coefficient of x1 is significant.
+
+## (g) Now suppose we obtain one additional observation, which was unfortunately mismeasured.
+
+## Re-fit the linear models from (c) to (e) using this new data. What effect does this new observation have on the each of the models? In each model, is this observation an outlier? A high-leverage point? Both? Explain your answers.
+```{r}
+x1 <- c(x1, 0.1) 
+x2 <- c(x2, 0.8) 
+y <- c(y, 6)
+
+mod3.14g1 <- lm(y ~ x1 + x2)
+summary(mod3.14g1)
+
+mod3.14g2 <- lm(y ~ x1)
+summary(mod3.14g2)
+
+mod3.14g3 <- lm(y ~ x2)
+summary(mod3.14g3)
+
+par(mfrow = c(3,4))
+plot(mod3.14g1);plot(mod3.14g2);plot(mod3.14g3)
+```
+Adding a new observation make the coefficient become statistically significant in all models. The last one will be the high leverage point in the full model.
+
+
+

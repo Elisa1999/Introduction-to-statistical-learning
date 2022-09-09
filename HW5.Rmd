@@ -1,0 +1,222 @@
+---
+title: "HW5"
+author: "Zhihui Zhang"
+date: "2/15/2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+7.3, 7.9, 7.10 and 7.11.
+
+```{r}
+library(ISLR2)
+library(caret)
+options(scipen = 999)
+library(boot)
+library(splines)
+library(leaps)
+library(gam)
+```
+
+## 7.9 This question uses the variables dis (the weighted mean of distances to five Boston employment centers) and nox (nitrogen oxides concen- tration in parts per 10 million) from the Boston data. We will treat dis as the predictor and nox as the response.
+
+## (a) Use the poly() function to fit a cubic polynomial regression to predict nox using dis. Report the regression output, and plot the resulting data and polynomial fits.
+```{r}
+mod7.9 <- lm(nox ~ poly(dis, 3), data = Boston)
+summary(mod7.9)
+dislims <- range(Boston$dis)
+dis.grid <- seq(from = dislims[1], to = dislims[2], by = 0.1)
+pred <- predict(mod7.9, newdata = list(dis = dis.grid))
+
+plot(nox ~ dis, data = Boston ,cex = 0.5, col = 'darkgrey' )
+lines(dis.grid, pred, lwd = 2, col = 'blue')
+```
+
+## (b) Plot the polynomial fits for a range of different polynomial degrees (say, from 1 to 10), and report the associated residual sum of squares.
+
+```{r}
+rss <- rep(0, 10)
+for(i in 1:10){
+  mod7.9b <- lm(nox ~ poly(dis, i), data = Boston)
+  rss[i] <- sum(mod7.9b$residuals^2)
+}
+plot(1:10, rss, type = 'l')
+```
+
+## (c) Perform cross-validation or another approach to select the optimal degree for the polynomial, and explain your results.
+
+```{r}
+set.seed(123)
+rss <- rep(0, 10)
+for(i in 1:10){
+  mod7.9c <- glm(nox ~ poly(dis, i), data = Boston)
+  cv.mod <- cv.glm(Boston, mod7.9c, K = 10)
+  rss[i] <- cv.mod$delta[1]
+}
+which.min(rss)
+plot(1:10, rss, type = 'l')
+```
+From the plot above, the optimal degree for the polynomial is 3. 
+
+## (d) Use the bs() function to fit a regression spline to predict nox using dis. Report the output for the fit using four degrees of freedom. How did you choose the knots? Plot the resulting fit.
+
+```{r}
+mod7.9d <- lm(nox ~ bs(dis, df = 4), data = Boston)
+pred <- predict(mod7.9d, newdata = list(dis = dis.grid))
+attr(bs(Boston$dis, df = 4), 'knots')
+plot(Boston$dis, Boston$nox, col = 'grey')
+lines(dis.grid, pred, lwd = 2)
+```
+The knots will be chosen at the uniform quantiles of the data. 
+
+## (e) Now fit a regression spline for a range of degrees of freedom, and plot the resulting fits and report the resulting RSS. Describe the results obtained.
+
+```{r}
+rss <- rep(0, 7)
+for(i in 3:10){
+  mod7.9e <- lm(nox ~ bs(dis, df = i), data = Boston)
+  rss[i-2] <- sum(mod7.9e$residuals^2)
+}
+
+plot(3:10, rss, type = 'l')
+```
+The residual sum squared is decreasing with the increase of degrees of freedom. 
+
+## (f) Perform cross-validation or another approach in order to select the best degrees of freedom for a regression spline on this data. Describe your results.
+```{r}
+set.seed(123)
+options(warn=-1)
+cv <- rep(0, 14)
+for (i in 3:16) {
+    mod7.9e <- glm(nox ~ bs(dis, df = i), data = Boston)
+    cv[i-2] <- cv.glm(Boston, mod7.9e, K = 10)$delta[1]
+}
+plot(3:16, cv, type = 'l')
+which.min(rss) + 2
+```
+The best degree of freedom for a regression spline is 10.
+
+## 7.10. This question relates to the College data set.
+
+## (a) Split the data into a training set and a test set. Using out-of-state tuition as the response and the other variables as the predictors, perform forward stepwise selection on the training set in order to identify a satisfactory model that uses just a subset of the predictors.
+```{r}
+# 50% use for training set, 50% for test set
+set.seed(456)
+train_ind <- sample(1:nrow(College), nrow(College)*0.5)
+test_ind <- (-train_ind)
+
+mod7.10a <- regsubsets(Outstate ~., College[train_ind,], nvmax = 17, method = 'forward')
+
+test.mat <- model.matrix(Outstate ~., data = College[test_ind,])
+val.error <- rep(0, 17)
+for(i in 1:17){
+  coefi <- coef(mod7.10a, id = i)
+  pred <- test.mat[ ,names(coefi)] %*% coefi
+  val.error[i] <- mean((College$Outstate[test_ind]- pred)^2)
+}
+which.min(val.error)
+# the best model from forward stepwise selection
+coef(mod7.10a, id = 12)
+```
+
+
+## (b) Fit a GAM on the training data, using out-of-state tuition as the response and the features selected in the previous step as the predictors. Plot the results, and explain your findings.
+```{r}
+mod7.10b <- gam(Outstate ~ Private + s(Apps,2) + s(Accept,2) + s(F.Undergrad,2) + s(Room.Board,2) + s(Personal,2) + s(PhD,2) + s(Terminal,2) + s(S.F.Ratio,2) + s(perc.alumni,2) + s(Expend,2) + s(Grad.Rate,2) , data = College[train_ind, ])
+par(mfrow = c(3,4))
+plot(mod7.10b, se = T, col = 'blue')
+```
+
+## (c) Evaluate the model obtained on the test set, and explain the results obtained.
+```{r}
+pred <- predict(mod7.10b, newdata = College[test_ind, ])
+rss <- mean((pred - College$Outstate[test_ind])^2)
+tss <- mean((College$Outstate[test_ind] - mean(College$Outstate[test_ind]))^2)
+r_2 <- 1 - rss/tss
+r_2
+```
+The r-square is 0.806 which indicates that our model can explained 80% of variance of the data when using these 12 predictors.
+
+## (d) For which variables, if any, is there evidence of a non-linear relationship with the response?
+```{r}
+summary(mod7.10b)
+```
+Anova shows that there is a strong evidence that Apps, Accept, Personal, S.F.Ratio and Expend has a non-linear relationship with Outstate.
+
+## 11. In Section 7.7, it was mentioned that GAMs are generally fit using a backfitting approach. The idea behind backfitting is actually quite simple. We will now explore backfitting in the context of multiple linear regression.
+
+## Suppose that we would like to perform multiple linear regression, but we do not have software to do so. Instead, we only have software to perform simple linear regression. Therefore, we take the following iterative approach: we repeatedly hold all but one coefficient estimate fixed at its current value, and update only that coefficient estimate using a simple linear regression. The process is continued until convergence—that is, until the coefficient estimates stop changing.
+## We now try this out on a toy example.
+
+## (a) Generate a response Y and two predictors X1 and X2, with n = 100.
+```{r}
+x1 <- 1:100
+x2 <- seq(from = 50, to = 0.5, by = -0.5)^2
+e <- rnorm(100)
+b0 <- 10
+y <- 3*x1 + 5*x2 + b0 + e
+```
+
+## (b) Initialize beta1 to take on a value of your choice. It does not matter what value you choose.
+```{r}
+beta1 <- -5
+```
+
+## (c) Keeping beta1 fixed, fit the model . You can do this as follows:
+```{r}
+a <- y - beta1 * x1
+beta2 <- lm(a ~ x2)$coef[2]
+beta2
+```
+
+## (d) Keeping beta2 fixed, fit the model You can do this as follows:
+```{r}
+a <- y - beta2 * x2
+beta1 <- lm(a ~ x1)$coef[2]
+beta1
+```
+
+## (e) Write a for loop to repeat (c) and (d) 1,000 times. Report the estimates of  and  at each iteration of the for loop. Create a plot in which each of these values is displayed, with each shown in a different color.
+```{r}
+beta0 <- rep(0, 1000)
+beta1 <- rep(0.5, 1000)
+beta2 <- rep(0, 1000)
+for(i in 2:1000){
+  a <- y - beta1[i-1]*x1 #update beta2
+  beta2[i] <- lm(a ~ x2)$coef[2]
+  #beta0[i] <- lm(a ~ x2)$coef[1]
+  a <- y - beta2[i]*x2 #use beta2 update beta1
+  beta1[i] <- lm(a ~ x1)$coef[2]
+  beta0[i] <- lm(a ~ x1)$coef[1]
+}
+plot(1:1000, beta2, ylim = c(0,20), col = 'red', cex = 0.4)
+points(1:1000, beta1, col = 'blue', pch=1, cex = 0.4)
+points(1:1000, beta0, col = 'black', pch=1, cex = 0.4)
+```
+
+## (f) Compare your answer in (e) to the results of simply performing multiple linear regression to predict Y using X1 and X2. Use the abline() function to overlay those multiple linear regression coefficient estimates on the plot obtained in (e).
+```{r}
+plot(1:1000, beta2, ylim = c(0,20), col = 'red', cex = 0.4)
+points(1:1000, beta1, col = 'blue', pch=1, cex = 0.4)
+points(1:1000, beta0, col = 'yellow', pch=1, cex = 0.4)
+abline(h = 5, col = 'black', lty = 2)
+abline(h = 10, col = 'black', lty = 2)
+abline(h = 3, col = 'black', lty = 2)
+```
+
+## (g) On this data set, how many backfitting iterations were required in order to obtain a “good” approximation to the multiple regression coefficient estimates?
+
+```{r}
+which.min(beta0[-1])
+which.max(beta1[-1])
+which.max(beta2[-1])
+```
+
+We need 464 iteration to obtain a good approximation to the multipe regression coefficient estimates.
+
